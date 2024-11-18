@@ -5,14 +5,15 @@ using Microsoft.Extensions.Configuration;
 using bmo_backend.Data;
 using bmo_backend.Models;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 public class MqttService
 {
     private readonly HiveMQClient _client;
-    private readonly ApplicationDbContext _context;
+    private readonly IServiceScopeFactory _scopeFactory;
     private bool _isSubscribed;
 
-    public MqttService(IConfiguration configuration, ApplicationDbContext context)
+    public MqttService(IConfiguration configuration, IServiceScopeFactory scopeFactory)
     {
         var hiveMqConfig = configuration.GetSection("HiveMQ");
         var host = hiveMqConfig["Host"] ?? throw new ArgumentNullException("Host configuration is missing");
@@ -31,7 +32,7 @@ public class MqttService
             Password = hiveMqConfig["Password"]
         };
         _client = new HiveMQClient(options);
-        _context = context;
+        _scopeFactory = scopeFactory;
         _isSubscribed = false;
     }
 
@@ -75,67 +76,71 @@ public class MqttService
         }
     }
 
- public async Task SubscribeAsync(string topic)
-{
-    if (_client.IsConnected())
+    public async Task SubscribeAsync(string topic)
     {
-        try
+        if (_client.IsConnected())
         {
-            var subscribeResult = await _client.SubscribeAsync(topic);
-
-            if (!_isSubscribed)
+            try
             {
-                _client.OnMessageReceived += async (sender, args) =>
+                var subscribeResult = await _client.SubscribeAsync(topic);
+
+                if (!_isSubscribed)
                 {
-                    var publishMessage = args.GetType().GetProperty("PublishMessage")?.GetValue(args) as MQTT5PublishMessage;
-                    if (publishMessage != null)
+                    _client.OnMessageReceived += async (sender, args) =>
                     {
-                        var receivedTopic = publishMessage.Topic;
-                        var payloadBytes = publishMessage.Payload;
-                        string payload = payloadBytes != null ? System.Text.Encoding.UTF8.GetString(payloadBytes) : "Payload vazio";
-
-                        Console.WriteLine($"Mensagem recebida no tópico {receivedTopic}: {payload}");
-
-                        var messageData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(payload);
-                        if (messageData != null && messageData.ContainsKey("id"))
+                        using (var scope = _scopeFactory.CreateScope())
                         {
-                            long id = messageData["id"].GetInt64();
+                            var _context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-                            var machine = await _context.Machines.FindAsync(id);
-                            if (machine == null)
+                            var publishMessage = args.GetType().GetProperty("PublishMessage")?.GetValue(args) as MQTT5PublishMessage;
+                            if (publishMessage != null)
                             {
-                                var newMachine = new Machines
+                                var receivedTopic = publishMessage.Topic;
+                                var payloadBytes = publishMessage.Payload;
+                                string payload = payloadBytes != null ? System.Text.Encoding.UTF8.GetString(payloadBytes) : "Payload vazio";
+
+                                Console.WriteLine($"Mensagem recebida no tópico {receivedTopic}: {payload}");
+
+                                var messageData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(payload);
+                                if (messageData != null && messageData.ContainsKey("id"))
                                 {
-                                    Id = id,
-                                    MaxTemperature = 80,
-                                    MaxVibration = 60,
-                                    NeedFix = false
-                                };
-                                _context.Machines.Add(newMachine);
-                                await _context.SaveChangesAsync();
-                                Console.WriteLine($"Novo registro de máquina criado com ID: {id}");
+                                    long id = messageData["id"].GetInt64();
+
+                                    var machine = await _context.Machines.FindAsync(id);
+                                    if (machine == null)
+                                    {
+                                        var newMachine = new Machines
+                                        {
+                                            Id = id,
+                                            MaxTemperature = 80,
+                                            MaxVibration = 60,
+                                            NeedFix = false
+                                        };
+                                        _context.Machines.Add(newMachine);
+                                        await _context.SaveChangesAsync();
+                                        Console.WriteLine($"Novo registro de máquina criado com ID: {id}");
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("Falha ao acessar o PublishMessage.");
                             }
                         }
-                    }
-                    else
-                    {
-                        Console.WriteLine("Falha ao acessar o PublishMessage.");
-                    }
-                };
-                _isSubscribed = true;
+                    };
+                    _isSubscribed = true;
+                }
+
+                Console.WriteLine($"Inscrito no tópico {topic}");
             }
-
-            Console.WriteLine($"Inscrito no tópico {topic}");
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Erro ao se inscrever no tópico: {ex.Message}");
+            }
         }
-        catch (Exception ex)
+        else
         {
-            Console.WriteLine($"Erro ao se inscrever no tópico: {ex.Message}");
+            Console.WriteLine("Cliente não está conectado.");
         }
     }
-    else
-    {
-        Console.WriteLine("Cliente não está conectado.");
-    }
-}
-
 }
