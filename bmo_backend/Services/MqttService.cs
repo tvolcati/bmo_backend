@@ -6,6 +6,7 @@ using bmo_backend.Data;
 using bmo_backend.Models;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 
 public class MqttService
 {
@@ -106,6 +107,7 @@ public class MqttService
                                 {
                                     long id = messageData["id"].GetInt64();
 
+                                    // Verificar se o ID existe no banco de dados
                                     var machine = await _context.Machines.FindAsync(id);
                                     if (machine == null)
                                     {
@@ -114,7 +116,10 @@ public class MqttService
                                             Id = id,
                                             MaxTemperature = 80,
                                             MaxVibration = 60,
-                                            NeedFix = false
+                                            NeedFix = false,
+                                            OilQuality = 100,
+                                            Description = "Máquina nova",
+                                            Type = 1
                                         };
                                         _context.Machines.Add(newMachine);
                                         await _context.SaveChangesAsync();

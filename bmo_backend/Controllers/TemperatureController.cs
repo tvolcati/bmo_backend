@@ -19,6 +19,6 @@ public class TemperatureController : ControllerBase
         _context.Temperature.Add(temperature);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(CreateTemperature), new { id = temperature.Id_running }, temperature);
+        return CreatedAtAction(nameof(CreateTemperature), new { id = temperature.Id }, temperature);
     }
 }

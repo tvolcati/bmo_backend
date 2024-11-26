@@ -19,6 +19,6 @@ public class RunningsController : ControllerBase
         _context.Runnings.Add(running);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(CreateRunning), new { id = running.Id_running }, running);
+        return CreatedAtAction(nameof(CreateRunning), new { id = running.Id }, running);
     }
 }

@@ -19,6 +19,6 @@ public class VibrationController : ControllerBase
         _context.Vibration.Add(vibration);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(CreateVibration), new { id = vibration.Id_running }, vibration);
+        return CreatedAtAction(nameof(CreateVibration), new { id = vibration.Id }, vibration);
     }
 }
