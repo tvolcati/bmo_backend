@@ -83,6 +83,7 @@ public class MqttService
         {
             try
             {
+                Console.WriteLine($"{topic}");
                 var subscribeResult = await _client.SubscribeAsync(topic);
 
                 if (!_isSubscribed)
@@ -102,29 +103,40 @@ public class MqttService
 
                                 Console.WriteLine($"Mensagem recebida no tópico {receivedTopic}: {payload}");
 
-                                var messageData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(payload);
-                                if (messageData != null && messageData.ContainsKey("id"))
+                                try
                                 {
-                                    long id = messageData["id"].GetInt64();
+                                    var messageData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(payload);
 
-                                    // Verificar se o ID existe no banco de dados
-                                    var machine = await _context.Machines.FindAsync(id);
-                                    if (machine == null)
+                                    if (messageData != null && messageData.ContainsKey("machineType") && messageData.ContainsKey("id"))
                                     {
-                                        var newMachine = new Machines
+                                        string machineType = messageData["machineType"].GetString();
+                                        int id = messageData["id"].GetInt32();
+
+                                        if (machineType == "Prensa")
                                         {
-                                            Id = id,
-                                            MaxTemperature = 80,
-                                            MaxVibration = 60,
-                                            NeedFix = false,
-                                            OilQuality = 100,
-                                            Description = "Máquina nova",
-                                            Type = 1
-                                        };
-                                        _context.Machines.Add(newMachine);
-                                        await _context.SaveChangesAsync();
-                                        Console.WriteLine($"Novo registro de máquina criado com ID: {id}");
+                                            await HandlePrensaMessageAsync(_context, messageData, id);
+                                        }
+                                        else if (machineType == "Compressor")
+                                        {
+                                            await HandleCompressorMessageAsync(_context, messageData, id);
+                                        }
+                                        else
+                                        {
+                                            Console.WriteLine($"Tipo de máquina desconhecido: {machineType}");
+                                        }
                                     }
+                                    else
+                                    {
+                                        Console.WriteLine("Mensagem inválida: faltando 'machineType' ou 'id'");
+                                    }
+                                }
+                                catch (JsonException jsonEx)
+                                {
+                                    Console.WriteLine($"Erro ao deserializar a mensagem: {jsonEx.Message}");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Erro ao processar a mensagem: {ex.Message}");
                                 }
                             }
                             else
@@ -147,5 +159,75 @@ public class MqttService
         {
             Console.WriteLine("Cliente não está conectado.");
         }
+    }
+
+    private async Task HandlePrensaMessageAsync(ApplicationDbContext _context, Dictionary<string, JsonElement> messageData, int id)
+    {
+        var prensa = await _context.Prensas.FindAsync(id);
+        if (prensa == null)
+        {
+            // Cria um novo registro de Prensa
+            prensa = new Prensa
+            {
+                Id = id,
+                // Definir outras propriedades padrão aqui
+            };
+            _context.Prensas.Add(prensa);
+            await _context.SaveChangesAsync();
+            Console.WriteLine($"Nova Prensa criada com ID: {id}");
+        }
+
+        // Cria um novo registro de PrensaRunning
+        var prensaRunning = new PrensaRunning
+        {
+            PrensaId = id,
+            //TimeStamp = DateTime.Now,
+        };
+
+        if (messageData.ContainsKey("distance"))
+        {
+            prensaRunning.DistanceTraveled = messageData["distance"].GetDouble();
+        }
+
+        _context.PrensaRunnings.Add(prensaRunning);
+        await _context.SaveChangesAsync();
+        Console.WriteLine($"Novo registro de PrensaRunning criado para Prensa ID: {id}");
+    }
+
+    private async Task HandleCompressorMessageAsync(ApplicationDbContext _context, Dictionary<string, JsonElement> messageData, int id)
+    {
+        var compressor = await _context.Compressors.FindAsync(id);
+        if (compressor == null)
+        {
+            // Cria um novo registro de Compressor
+            compressor = new Compressor
+            {
+                Id = id,
+                // Você pode definir outras propriedades padrão aqui, se necessário
+            };
+            _context.Compressors.Add(compressor);
+            await _context.SaveChangesAsync();
+            Console.WriteLine($"Novo Compressor criado com ID: {id}");
+        }
+
+        // Cria um novo registro de CompressorRunning
+        var compressorRunning = new CompressorRunning
+        {
+            CompressorId = id,
+            TimeStamp = DateTime.Now,
+        };
+
+        if (messageData.ContainsKey("temperature"))
+        {
+            compressorRunning.Temperature = messageData["temperature"].GetDouble();
+        }
+        if (messageData.ContainsKey("vibration"))
+        {
+            compressorRunning.Vibration = messageData["vibration"].GetDouble();
+        }
+
+        _context.CompressorRunnings.Add(compressorRunning);
+        await _context.SaveChangesAsync();
+        Console.WriteLine($"Novo registro de CompressorRunning criado para Compressor ID: {id}");
     }
 }

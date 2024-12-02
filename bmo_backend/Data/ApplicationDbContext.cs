@@ -12,6 +12,10 @@ namespace bmo_backend.Data
         public DbSet<Temperature> Temperature { get; set; }
         public DbSet<Distance> Distance { get; set; }
         public DbSet<Vibration> Vibration { get; set; }
+        public DbSet<Compressor> Compressors { get; set; }
+        public DbSet<CompressorRunning> CompressorRunnings { get; set; }
+        public DbSet<Prensa> Prensas { get; set; }
+        public DbSet<PrensaRunning> PrensaRunnings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -73,6 +77,31 @@ namespace bmo_backend.Data
                 .HasOne<Runnings>()
                 .WithMany()
                 .HasForeignKey(v => v.Id_Running);
+
+            // Configurações para Compressor e CompressorRunning
+            modelBuilder.Entity<Compressor>()
+                .HasKey(c => c.Id);
+
+            modelBuilder.Entity<CompressorRunning>()
+                .HasKey(cr => cr.RunningId);
+
+            // Remove to create Compressor
+            //modelBuilder.Entity<CompressorRunning>()
+            //    .HasOne(cr => cr.Compressor)
+            //    .WithMany(c => c.CompressorRunnings)
+            //    .HasForeignKey(cr => cr.CompressorId);
+
+            // Configurações para Prensa e PrensaRunning
+            modelBuilder.Entity<Prensa>()
+                .HasKey(p => p.Id);
+
+            modelBuilder.Entity<PrensaRunning>()
+                .HasKey(pr => pr.RunningId);
+
+            ////modelBuilder.Entity<PrensaRunning>()
+            ////    .HasOne(pr => pr.Prensa)
+            ////    .WithMany(p => p.PrensaRunnings)
+            ////    .HasForeignKey(pr => pr.PrensaId);
 
             base.OnModelCreating(modelBuilder);
         }
