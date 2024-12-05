@@ -170,6 +170,8 @@ public class MqttService
             prensa = new Prensa
             {
                 Id = id,
+                NumberOfFailures = 0,
+                MaximumDistance = 70,
                 // Definir outras propriedades padrão aqui
             };
             _context.Prensas.Add(prensa);
@@ -177,11 +179,17 @@ public class MqttService
             Console.WriteLine($"Nova Prensa criada com ID: {id}");
         }
 
+        if (messageData.ContainsKey("oil_quality"))
+        {
+            prensa.OilQuality = messageData["oil_quality"].GetDouble().ToString();
+            _context.Prensas.Update(prensa);
+        }
+
         // Cria um novo registro de PrensaRunning
         var prensaRunning = new PrensaRunning
         {
             PrensaId = id,
-            //TimeStamp = DateTime.Now,
+            TimeStamp = DateTime.UtcNow,
         };
 
         if (messageData.ContainsKey("distance"))
